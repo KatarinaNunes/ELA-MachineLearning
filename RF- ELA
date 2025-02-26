@@ -1,0 +1,161 @@
+import pandas as pd
+
+# Carregar o arquivo (descompactado automaticamente pelo pandas)
+clinvar = pd.read_csv("/variant_summary.txt.gz", sep="\t", low_memory=False)
+
+print(clinvar.columns)
+
+ela_variants = pd.read_csv("ela_variants.csv")
+print(ela_variants.columns)
+
+ela_variants.to_csv("/home/ela_variants.csv", index=False)
+
+ela_variants = clinvar[clinvar["PhenotypeList"].str.contains("Amyotrophic Lateral Sclerosis", na=False, case=False)]
+
+print(ela_variants.head())
+
+ela_variants = pd.read_csv("ela_variants.csv")
+
+df = ela_variants[['Chromosome', 'Start', 'ReferenceAlleleVCF', 'AlternateAlleleVCF', 'ClinicalSignificance']]
+
+df = df.dropna()
+
+df['ClinicalSignificance'] = df['ClinicalSignificance'].map({
+    'Benign': 0, 'Likely benign': 0, 'Pathogenic': 1, 'Likely pathogenic': 1
+}).dropna()
+
+import pandas as pd
+
+# Substituir 'X' e 'Y' pelos números 23 e 24
+df['Chromosome'] = df['Chromosome'].replace({'X': 23, 'Y': 24})
+
+# Remover valores não numéricos (como 'na', '', etc.)
+df = df[pd.to_numeric(df['Chromosome'], errors='coerce').notna()]
+
+# Converter para inteiro
+df['Chromosome'] = df['Chromosome'].astype(int)
+
+# Exibir as primeiras linhas para conferir
+print(df.head())
+
+df = df.dropna()
+
+nucleotide_map = {'A': 1, 'T': 2, 'C': 3, 'G': 4}
+df['ReferenceAlleleVCF'] = df['ReferenceAlleleVCF'].map(nucleotide_map)
+df['AlternateAlleleVCF'] = df['AlternateAlleleVCF'].map(nucleotide_map)
+
+df.to_csv("/home/ela_variants_cleaned.csv", index=False)
+
+df = df.dropna()
+
+print(df.head())
+
+#treinamento_teste
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+# Carregar os dados processados
+df = pd.read_csv("ela_variants_cleaned.csv")
+
+# Separar features (X) e rótulos (y)
+X = df[['Chromosome', 'Start', 'ReferenceAlleleVCF', 'AlternateAlleleVCF']]
+y = df['ClinicalSignificance']  # 0 = Benigno, 1 = Patogênico
+
+# Dividir os dados em treino (80%) e teste (20%)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+df = df.dropna()
+
+print(f"Tamanho do conjunto de treino: {X_train.shape}")
+print(f"Tamanho do conjunto de teste: {X_test.shape}")
+
+y_train = pd.to_numeric(y_train, errors='coerce')  # Converte strings para NaN se não forem números
+y_train = y_train.fillna(y_train.mean())  # Substitui NaN pela média (ou outro valor apropriado)
+
+print(y_train.dtype)  # Tipo de dado
+print(y_train.unique())  # Valores únicos
+
+from sklearn.preprocessing import LabelEncoder
+
+le = LabelEncoder()
+y_train = le.fit_transform(y_train.astype(str))  # Garante que os valores sejam strings antes de transformar
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+
+X_test = X_test[~y_test.isna()]
+y_test = y_test.dropna()
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+
+# Treinar o modelo nos dados de treino
+model.fit(X_train, y_train)
+
+# Fazer previsões no conjunto de teste
+y_pred = model.predict(X_test)
+
+# Avaliar o modelo
+accuracy = accuracy_score(y_test, y_pred)
+print(f"Acurácia do modelo: {accuracy:.2f}")
+
+# Relatório de classificação
+print(classification_report(y_test, y_pred))
+
+from sklearn.metrics import classification_report
+
+print(classification_report(y_test, y_pred, zero_division=1))
+
+# Verificar a quantidade de valores NaN em y_train
+print("Valores NaN em y_train:", y_train.isna().sum())
+
+# Remover os registros correspondentes a NaN em y_train e X_train
+mask = y_train.notna()
+X_train_clean = X_train[mask]
+y_train_clean = y_train[mask]
+
+# Verificar as novas dimensões
+print("Dimensões de X_train após remoção de NaN:", X_train_clean.shape)
+print("Dimensões de y_train após remoção de NaN:", y_train_clean.shape)
+
+# Verificar a quantidade de valores NaN em X_train
+print("Valores NaN em X_train:", X_train.isna().sum())
+
+# Remover os registros correspondentes a NaN em X_train e y_train
+mask = X_train.notna().all(axis=1) & y_train.notna()
+X_train_clean = X_train[mask]
+y_train_clean = y_train[mask]
+
+# Verificar as novas dimensões
+print("Dimensões de X_train após remoção de NaN:", X_train_clean.shape)
+print("Dimensões de y_train após remoção de NaN:", y_train_clean.shape)
+
+from imblearn.over_sampling import SMOTE
+
+# Aplicar SMOTE aos dados limpos
+smote = SMOTE(random_state=42)
+X_resampled, y_resampled = smote.fit_resample(X_train_clean, y_train_clean)
+
+# Verificar a nova distribuição das classes
+print("Antes do SMOTE:", y_train_clean.value_counts())
+print("Depois do SMOTE:", y_resampled.value_counts())
+
+# Remover amostras com NaN em y_test
+mask = ~y_test.isnull()
+y_test_clean = y_test[mask]
+y_pred_clean = y_pred[mask]  # Também limpe y_pred para manter o alinhamento
+
+from sklearn.metrics import classification_report, accuracy_score
+
+# Avaliar o modelo com os dados limpos
+print(classification_report(y_test_clean, y_pred_clean, zero_division=1))
+accuracy = accuracy_score(y_test_clean, y_pred_clean)
+print(f"Acurácia do modelo: {accuracy:.2f}")
+
+
